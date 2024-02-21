@@ -1,0 +1,169 @@
+---
+title: "PROJECT ON STRATEGIC INVESTMENT IN NIFTY 50 SHARES"
+author: "Rohit Kumar Gupta"
+date: "2024-02-18"
+output: 
+  html_document:
+    theme: cerulean
+    toc: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## About Nifty 50
+  The NIFTY 50 is a benchmark Indian Stock market index that represents the weighted average of 50 of the largest Indian companies listed on the National Stock Exchange. Nifty 50 is owned and managed by NSE indices, which is a wholly owned subsidiary of NSE Strategic Investment Corporation Limited.
+  
+## Aim of the project
+  This R project aims to visualize/predict the suitable days for investment or selling/buying the NIFTY 50 stocks to maximise the profit for stock traders.
+  
+Note:- Stock prices are very unstable and are very hard to build the model out of the data. The data used in this project is of one year. Also thee are various other external factors/regressors that many influence the stock market movement.
+
+## Data for Project
+  Data used for this project is scrapped from the NIFTY 50 official Database. The Data is dated from 7th February 2023 to 6th February 2024, i.e. one year. The dataset is in .csv format named "nifty.csv".
+  
+### Data Structure
+Date - Contain Stock Market date (excluding weekends and holidays)
+
+Open - Opening price of stock at given date.
+
+High - Highest price of stock at given date.
+
+Low - Lowest price of stock at given date.
+
+Close - Closing price of stock at given date.
+
+Shares Traded - Traded volume of stock at given date.
+
+Turnover - Turnover of the stocks traded.
+
+## Loading the dataset
+
+  After scrapping the dataset, we need to load the data into RStudio for analysis and prediction.
+The data will be stored in "mydata" object.
+
+```{r}
+mydata <- read.csv("nifty.csv",header = TRUE)
+```
+
+## Installing required packages
+  Some packages are required for time series analysis that do not come preinstalled with R base. We need to install them separately.
+  
+```{r}
+install.packages('dplyr',repos = "http://cran.us.r-project.org")
+install.packages('forecast',repos = "http://cran.us.r-project.org")
+install.packages('zoo',repos = "http://cran.us.r-project.org")
+```
+
+## Exploratory Data Analysis
+
+  We will explore the NIFTY 50 dataset for trends and patterns which will help us in doing further analysis. we will first explore the open price of the stocks.
+  
+```{r}
+plot(as.ts(mydata$Open))
+```
+
+We see a clear trend (upward) indicating the NIFTY 50 data has a increasing stock price with respect to time-series.
+
+```{r}
+library(forecast)
+ggtsdisplay(as.ts(mydata$Open))
+```
+
+In the figures, we can see that ACF is generally declining with lags. The PACF has 1 Significant lags followed by a drop in PACF values and they become insignificant. With 1 significant PACF lag and gradually falling ACF, we can say that the series is an AR(0) process.
+
+## Verifying ARIMA Forecasting
+  For verification, we would make an arima model out of the nifty data, and use it for forecasting the trend for 20 days. We would be using two plots, one using auto.arima forecasting and other with exponential smoothing forecast method.
+  
+```{r}
+niftyarima <- auto.arima(as.ts(mydata$Open),stepwise = T,approximation = F,trace = T)
+niftyarima
+plot(forecast(niftyarima,h = 20))
+plot(forecast(ets(mydata$Open),h = 20))
+```
+
+## Cleaning the dataset
+  As we all know, the stock/share market is off on weekends also, there are various calendar holidays in which trading is off. So to make time series dataset of NIFTY 50 fit for analysis, we need to make this dataset regular.
+  
+  We first merge the dataset with calendar dates in order to fill weekends and holidays filled with NA's.
+  
+```{r}
+mydate <- seq.Date(from = as.Date("2023-02-07"),to = as.Date("2024-02-06"),by = 1)
+mydate <- data.frame(Date = mydate)
+```
+
+### Reformatting the date column
+```{r}
+convert_date <- function(x){
+  as.Date(as.character(x),format = "%d-%b-%Y")
+}
+library(dplyr)
+mydata <- mydata %>% mutate(Date = convert_date(Date))
+mydata <- merge(mydata,mydate,by = "Date",all.y = T)
+```
+
+To make the dataframe more regular, we will chop off initial dataset.
+
+```{r}
+mydata <- mydata[7:365,]
+```
+
+First we will be removing Sundays from the dataset. "Sunday" are represented by 7, i.e., every 7th row of dataset is a sunday.
+
+```{r}
+mydata <- mydata[-(seq(from = 7,to = nrow(mydata),by = 7)),]
+```
+
+Now we will removing Saturdays from the dataset. "Saturdays" are represented by 6, i.e., every 6th row of dataset is a saturday.
+
+```{r}
+mydata <- mydata[-(seq(from = 6,to = nrow(mydata),by = 6)),]
+```
+
+Now we are left with NA's that are associated with holidays. To remove them, we will impute them with last observation.
+
+```{r}
+library(zoo)
+mydata <- na.locf(mydata)
+```
+
+## Analyzing Highest Price and Lowest Price
+
+```{r}
+highestprice <- ts(as.numeric(mydata$High),frequency = 5)
+plot(highestprice)
+lowestprice <- ts(as.numeric(mydata$Low),frequency = 5)
+plot(lowestprice)
+```
+
+There is a clear up-trend in the data.
+
+Now, we will visualize highest price recorded per day of the week.
+
+```{r}
+seasonplot(highestprice,season.labels = c("Mon","Tue","Wed","Thu","Fri"))
+```
+
+We observe that the highest price are recorded in Mon, Tue and Fri.
+We can verify the above findings by monthly plotting of the weekly highest price.
+
+```{r}
+monthplot(highestprice)
+```
+
+## Final Comaprison Plot
+
+  Our final step is to compare the graph of lowest price and highest price, each calculated by taking the median of the weekly data. Since median of the data shows the 50 percentile of the data.
+  
+  We woould be comparing highest price and lowest price monthplot data.
+
+```{r}
+par(mfrow = c(1,2))
+monthplot(highestprice,base = median,col.base = "green")
+monthplot(lowestprice,base = median,col.base = "red")
+par(mfrow = c(1,1))
+```
+
+## Conlusion
+  From the above comparison plot, we can conclude that "Thursday" and "Tuesday" are the best days for selling the stocks, since prices tend to be higher on these days. Whereas "Friday" and "Monday" are the best days for buying the stocks, since prices tend to be lower on these days.
